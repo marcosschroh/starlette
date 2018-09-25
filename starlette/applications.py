@@ -67,7 +67,12 @@ class Starlette:
     def add_exception_handler(self, exc_class: type, handler: typing.Callable) -> None:
         self.exception_middleware.add_exception_handler(exc_class, handler)
 
-    def add_route(self, path: str, route: typing.Callable, methods: typing.Optional[Methods] = None) -> None:
+    def add_route(
+        self,
+        path: str,
+        route: typing.Callable,
+        methods: typing.Optional[Methods] = None,
+    ) -> None:
         if not inspect.isclass(route):
             route = request_response(route)
             if methods is None:
