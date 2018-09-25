@@ -12,4 +12,6 @@ ASGIApp = typing.Callable[[Scope], ASGIInstance]
 
 StrDict = typing.Mapping[str, str]
 BytesPairs = typing.List[typing.Tuple[bytes, bytes]]
+
 Methods = typing.Sequence[str]
+Subprotocols = typing.Sequence[str]
