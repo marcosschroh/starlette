@@ -44,12 +44,12 @@ class _ASGIAdapter(requests.adapters.HTTPAdapter):
         self.app = app
         self.raise_server_exceptions = raise_server_exceptions
 
-    def send(
+    def send(  # type: ignore
         self, request: requests.PreparedRequest, *args: typing.Any, **kwargs: typing.Any
-    ) -> requests.Response:  # type: ignore
-        scheme, netloc, path, params, query, fragement = urlparse(
+    ) -> requests.Response:
+        scheme, netloc, path, params, query, fragement = urlparse(  # type: ignore
             request.url
-        )  # type: ignore
+        )
         if ":" in netloc:
             port: typing.Any
             host, port = netloc.split(":", 1)
@@ -262,9 +262,9 @@ class _TestClient(requests.Session):
         self.headers.update({"user-agent": "testclient"})
         self.base_url = base_url
 
-    def request(
+    def request(  # type: ignore
         self, method: str, url: str, **kwargs: typing.Any
-    ) -> requests.Response:  # type: ignore
+    ) -> requests.Response:
         url = urljoin(self.base_url, url)
         return super().request(method, url, **kwargs)
 
