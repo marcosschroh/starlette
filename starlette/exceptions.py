@@ -1,8 +1,14 @@
+import asyncio
+import http
+import typing
+
 from starlette.debug import get_debug_response
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
-import asyncio
-import http
+from starlette.types import Scope, Send, Receive, ASGIInstance, Message
+
+if typing.TYPE_CHECKING:
+    from starlette.routing import Router  # pragma: no cover
 
 
 class HTTPException(Exception):
@@ -14,32 +20,36 @@ class HTTPException(Exception):
 
 
 class ExceptionMiddleware:
-    def __init__(self, app, debug=False):
-        self.app = app
+    def __init__(self, router: "Router", debug: typing.Optional[bool] = False) -> None:
+        self.router = router
         self.debug = debug
-        self._exception_handlers = {
+        self._exception_handlers: typing.Dict[type, typing.Callable] = {
             Exception: self.server_error,
             HTTPException: self.http_exception,
         }
 
-    def add_exception_handler(self, exc_class, handler):
+    def add_exception_handler(self, exc_class: type, handler: typing.Callable) -> None:
         assert issubclass(exc_class, Exception)
         self._exception_handlers[exc_class] = handler
 
-    def _lookup_exception_handler(self, exc):
+    def _lookup_exception_handler(
+        self, exc: typing.Union[type, BaseException]
+    ) -> typing.Tuple[typing.Callable, type]:
         for cls in type(exc).__mro__:
             handler = self._exception_handlers.get(cls)
             if handler is not None:
                 return handler, cls
 
-    def __call__(self, scope):
-        if scope["type"] != "http":
-            return self.app(scope)
+        assert False  # pragma: no cover
 
-        async def app(receive, send):
+    def __call__(self, scope: Scope) -> ASGIInstance:
+        if scope["type"] != "http":
+            return self.router(scope)
+
+        async def app(receive: Receive, send: Send) -> None:
             response_started = False
 
-            async def sender(message):
+            async def sender(message: Message) -> None:
                 nonlocal response_started
 
                 if message["type"] == "http.response.start":
@@ -48,7 +58,7 @@ class ExceptionMiddleware:
 
             try:
                 try:
-                    instance = self.app(scope)
+                    instance = self.router(scope)
                     await instance(receive, sender)
                 except BaseException as exc:
                     # Exception handling is applied to any registed exception
@@ -92,7 +102,7 @@ class ExceptionMiddleware:
 
         return app
 
-    def http_exception(self, request: Request, exc: type) -> Response:
+    def http_exception(self, request: Request, exc: HTTPException) -> Response:
         if exc.status_code in {204, 304}:
             return Response(b"", status_code=exc.status_code)
         return PlainTextResponse(exc.detail, status_code=exc.status_code)

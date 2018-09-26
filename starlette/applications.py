@@ -53,7 +53,7 @@ class Starlette:
         self.exception_middleware = ExceptionMiddleware(self.router, debug=debug)
 
     @property
-    def debug(self) -> bool:
+    def debug(self) -> typing.Optional[bool]:
         return self.exception_middleware.debug
 
     @debug.setter
