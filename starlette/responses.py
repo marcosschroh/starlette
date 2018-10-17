@@ -1,13 +1,14 @@
+import hashlib
+import os
+import typing
+import json
+
 from email.utils import formatdate
 from mimetypes import guess_type
 from starlette.background import BackgroundTask
 from starlette.datastructures import MutableHeaders, URL
 from starlette.types import Receive, Send
 from urllib.parse import quote_plus
-import hashlib
-import json
-import os
-import typing
 import http.cookies
 
 try:
@@ -47,7 +48,7 @@ class Response:
             return content
         return content.encode(self.charset)
 
-    def init_headers(self, headers) -> None:
+    def init_headers(self, headers: typing.Mapping[str, str] = None) -> None:
         if headers is None:
             raw_headers = []  # type: typing.List[typing.Tuple[bytes, bytes]]
             populate_content_length = True
@@ -77,7 +78,7 @@ class Response:
     @property
     def headers(self) -> MutableHeaders:
         if not hasattr(self, "_headers"):
-            self._headers = MutableHeaders(self.raw_headers)
+            self._headers = MutableHeaders(raw=self.raw_headers)
         return self._headers
 
     def set_cookie(
@@ -215,7 +216,7 @@ class FileResponse(Response):
         if stat_result is not None:
             self.set_stat_headers(stat_result)
 
-    def set_stat_headers(self, stat_result):
+    def set_stat_headers(self, stat_result: os.stat_result) -> None:
         content_length = str(stat_result.st_size)
         last_modified = formatdate(stat_result.st_mtime, usegmt=True)
         etag_base = str(stat_result.st_mtime) + "-" + str(stat_result.st_size)

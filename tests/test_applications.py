@@ -14,7 +14,7 @@ class TrustedHostMiddleware:
         self.hostname = hostname
 
     def __call__(self, scope):
-        headers = Headers(scope["headers"])
+        headers = Headers(scope=scope)
         if headers.get("host") != self.hostname:
             return PlainTextResponse("Invalid host header", status_code=400)
         return self.app(scope)
@@ -58,7 +58,7 @@ def user_page(request, username):
 
 
 @app.route("/500")
-def func_homepage(request):
+def runtime_error(request):
     raise RuntimeError()
 
 

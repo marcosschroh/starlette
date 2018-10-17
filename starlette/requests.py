@@ -46,14 +46,13 @@ class Request(Mapping):
     @property
     def headers(self) -> Headers:
         if not hasattr(self, "_headers"):
-            self._headers = Headers(self._scope["headers"])
+            self._headers = Headers(scope=self._scope)
         return self._headers
 
     @property
     def query_params(self) -> QueryParams:
         if not hasattr(self, "_query_params"):
-            query_string = self._scope["query_string"].decode()
-            self._query_params = QueryParams(query_string)
+            self._query_params = QueryParams(scope=self._scope)
         return self._query_params
 
     @property
@@ -107,7 +106,7 @@ class Request(Mapping):
             self._json = json.loads(body)
         return self._json
 
-    async def form(self):
+    async def form(self) -> dict:
         if not hasattr(self, "_form"):
             assert (
                 parse_options_header is not None
@@ -115,17 +114,17 @@ class Request(Mapping):
             content_type_header = self.headers.get("Content-Type")
             content_type, options = parse_options_header(content_type_header)
             if content_type == b"multipart/form-data":
-                parser = MultiPartParser(self.headers, self.stream())
-                self._form = await parser.parse()
+                multipart_parser = MultiPartParser(self.headers, self.stream())
+                self._form = await multipart_parser.parse()
             elif content_type == b"application/x-www-form-urlencoded":
-                parser = FormParser(self.headers, self.stream())
-                self._form = await parser.parse()
+                from_parser = FormParser(self.headers, self.stream())
+                self._form = await from_parser.parse()
             else:
                 self._form = {}
         return self._form
 
-    async def close(self):
+    async def close(self) -> None:
         if hasattr(self, "_form"):
             for item in self._form.values():
                 if hasattr(item, "close"):
-                    await item.close()
+                    await item.close()  # type: ignore
