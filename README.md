@@ -34,6 +34,7 @@ It is production-ready, and gives you the following:
 * Startup and shutdown events.
 * Test client built on `requests`.
 * CORS, GZip, Static Files, Streaming responses.
+* Session and Cookie support.
 * 100% test coverage.
 * 100% type annotated codebase.
 * Zero hard dependencies.
@@ -79,6 +80,7 @@ Starlette does not have any hard dependencies, but the following are optional:
 * `aiofiles` - Required if you want to use `FileResponse` or `StaticFiles`.
 * `python-multipart` - Required if you want to support form parsing, with `request.form()`.
 * `graphene` - Required for GraphQL support.
+* `itsdangerous` - Required for SessionMiddleware support.
 * `ujson` - Required if you want to use `UJSONResponse`.
 
 You can install all of these with `pip3 install starlette[full]`.
