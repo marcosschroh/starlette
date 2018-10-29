@@ -1,42 +1,65 @@
 from starlette.responses import Response
 from starlette.testclient import TestClient
 from starlette.exceptions import ExceptionMiddleware
-from starlette.routing import Path, PathPrefix, Router, ProtocolRouter
+from starlette.routing import Route, Mount, NoMatchFound, Router, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 import pytest
 
 
-def homepage(scope):
+def homepage(request):
     return Response("Hello, world", media_type="text/plain")
 
 
-def users(scope):
+def users(request):
     return Response("All users", media_type="text/plain")
 
 
-def user(scope):
-    content = "User " + scope["kwargs"]["username"]
+def user(request):
+    content = "User " + request.path_params["username"]
     return Response(content, media_type="text/plain")
 
 
-def staticfiles(scope):
+def staticfiles(request):
     return Response("xxxxx", media_type="image/png")
 
 
 app = Router(
     [
-        Path("/", app=homepage, methods=["GET"]),
-        PathPrefix(
-            "/users", app=Router([Path("", app=users), Path("/{username}", app=user)])
+        Route("/", endpoint=homepage, methods=["GET"]),
+        Mount(
+            "/users",
+            app=Router(
+                [Route("", endpoint=users), Route("/{username}", endpoint=user)]
+            ),
         ),
-        PathPrefix("/static", app=staticfiles, methods=["GET"]),
+        Mount("/static", app=staticfiles),
     ]
 )
 
 
-def test_router():
-    client = TestClient(app)
+@app.route("/func")
+def func_homepage(request):
+    return Response("Hello, world!", media_type="text/plain")
 
+
+@app.websocket_route("/ws")
+async def websocket_endpoint(session):
+    await session.accept()
+    await session.send_text("Hello, world!")
+    await session.close()
+
+
+@app.websocket_route("/ws/{room}")
+async def websocket_params(session):
+    await session.accept()
+    await session.send_text("Hello, %s!" % session.path_params["room"])
+    await session.close()
+
+
+client = TestClient(app)
+
+
+def test_router():
     response = client.get("/")
     assert response.status_code == 200
     assert response.text == "Hello, world"
@@ -61,30 +84,52 @@ def test_router():
     assert response.status_code == 200
     assert response.text == "xxxxx"
 
-    response = client.post("/static/123")
-    assert response.status_code == 405
-    assert response.text == "Method Not Allowed"
+
+def test_url_path_for():
+    assert app.url_path_for("homepage") == "/"
+    assert app.url_path_for("user", username="tomchristie") == "/users/tomchristie"
+    assert app.url_path_for("websocket_endpoint") == "/ws"
+    with pytest.raises(NoMatchFound):
+        assert app.url_path_for("broken")
 
 
-def http_endpoint(scope):
-    return Response("Hello, world", media_type="text/plain")
+def test_router_add_route():
+    response = client.get("/func")
+    assert response.status_code == 200
+    assert response.text == "Hello, world!"
 
 
-def websocket_endpoint(scope):
-    async def asgi(receive, send):
-        session = WebSocket(scope, receive, send)
+def test_router_add_websocket_route():
+    with client.websocket_connect("/ws") as session:
+        text = session.receive_text()
+        assert text == "Hello, world!"
+
+    with client.websocket_connect("/ws/test") as session:
+        text = session.receive_text()
+        assert text == "Hello, test!"
+
+
+def http_endpoint(request):
+    url = request.url_for("http_endpoint")
+    return Response("URL: %s" % url, media_type="text/plain")
+
+
+class WebsocketEndpoint:
+    def __init__(self, scope):
+        self.scope = scope
+
+    async def __call__(self, receive, send):
+        session = WebSocket(scope=self.scope, receive=receive, send=send)
         await session.accept()
-        await session.send_json({"hello": "world"})
+        await session.send_json({"URL": str(session.url_for("WebsocketEndpoint"))})
         await session.close()
 
-    return asgi
 
-
-mixed_protocol_app = ProtocolRouter(
-    {
-        "http": Router([Path("/", app=http_endpoint)]),
-        "websocket": Router([Path("/", app=websocket_endpoint)]),
-    }
+mixed_protocol_app = Router(
+    routes=[
+        Route("/", endpoint=http_endpoint),
+        WebSocketRoute("/", endpoint=WebsocketEndpoint),
+    ]
 )
 
 
@@ -93,10 +138,10 @@ def test_protocol_switch():
 
     response = client.get("/")
     assert response.status_code == 200
-    assert response.text == "Hello, world"
+    assert response.text == "URL: http://testserver/"
 
     with client.websocket_connect("/") as session:
-        assert session.receive_json() == {"hello": "world"}
+        assert session.receive_json() == {"URL": "ws://testserver/"}
 
     with pytest.raises(WebSocketDisconnect):
         client.websocket_connect("/404")

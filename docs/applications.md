@@ -19,7 +19,8 @@ def homepage(request):
 
 
 @app.route('/user/{username}')
-def user(request, username):
+def user(request):
+    username = request.path_params['username']
     return PlainTextResponse('Hello, %s!' % username)
 
 
@@ -56,7 +57,7 @@ There are two ways to add event handlers:
 * `@app.on_event(event_type)` - Add an event, decorator style
 * `app.add_event_handler(event_type, func)` - Add an event through a function call.
 
-`event_type` must be specified as either `'startup'` or `'cleanup'`.
+`event_type` must be specified as either `'startup'` or `'shutdown'`.
 
 ### Submounting other applications
 

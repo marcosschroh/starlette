@@ -5,7 +5,7 @@ from urllib.parse import unquote
 import http.cookies
 from starlette.datastructures import URL, Headers, QueryParams
 from starlette.formparsers import FormParser, MultiPartParser
-from starlette.types import Scope, Receive
+from starlette.types import Scope, Receive, Message
 
 try:
     from multipart.multipart import parse_options_header
@@ -17,11 +17,15 @@ class ClientDisconnect(Exception):
     pass
 
 
+async def empty_receive() -> Message:
+    raise RuntimeError("Receive channel has not been made available")
+
+
 class Request(Mapping):
     def __init__(self, scope: Scope, receive: Receive = None) -> None:
         assert scope["type"] == "http"
         self._scope = scope
-        self._receive = receive
+        self._receive = empty_receive if receive is None else receive
         self._stream_consumed = False
 
     def __getitem__(self, key: str) -> str:
@@ -56,6 +60,10 @@ class Request(Mapping):
         return self._query_params
 
     @property
+    def path_params(self) -> dict:
+        return self._scope.get("path_params", {})
+
+    @property
     def cookies(self) -> typing.Dict[str, str]:
         if not hasattr(self, "_cookies"):
             cookies = {}
@@ -68,6 +76,15 @@ class Request(Mapping):
             self._cookies = cookies
         return self._cookies
 
+    @property
+    def receive(self) -> Receive:
+        return self._receive
+
+    def url_for(self, name: str, **path_params: typing.Any) -> URL:
+        router = self._scope["router"]
+        url = router.url_path_for(name, **path_params)
+        return url.replace(secure=self.url.is_secure, netloc=self.url.netloc)
+
     async def stream(self) -> typing.AsyncGenerator[bytes, None]:
         if hasattr(self, "_body"):
             yield self._body
@@ -75,9 +92,6 @@ class Request(Mapping):
 
         if self._stream_consumed:
             raise RuntimeError("Stream consumed")
-
-        if self._receive is None:
-            raise RuntimeError("Receive channel has not been made available")
 
         self._stream_consumed = True
         while True:
